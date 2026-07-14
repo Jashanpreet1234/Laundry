@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Laundry Requests</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%232b6cb0'/%3E%3Crect x='8' y='10' width='48' height='44' rx='7' fill='white' opacity='0.97'/%3E%3Crect x='8' y='10' width='48' height='12' rx='7' fill='%231a4a80'/%3E%3Crect x='8' y='17' width='48' height='5' fill='%231a4a80'/%3E%3Ccircle cx='19' cy='16' r='3' fill='%2363b3ed'/%3E%3Ccircle cx='28' cy='16' r='3' fill='%2390cdf4'/%3E%3Ccircle cx='45' cy='16' r='2' fill='%234299e1'/%3E%3Ccircle cx='32' cy='37' r='13' fill='%23ebf8ff' stroke='%232b6cb0' stroke-width='2.5'/%3E%3Ccircle cx='32' cy='37' r='8' fill='none' stroke='%234299e1' stroke-width='1.5' stroke-dasharray='3 2'/%3E%3Cpath d='M23 37 Q27.5 31 32 37 Q36.5 43 41 37' fill='none' stroke='%232b6cb0' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E" />
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <style>
+    :root {
+      --bg:#f0f4f8; --bg2:#e2e8f0; --card:#fff; --card2:#f7fafc;
+      --border:#e2e8f0; --border2:#cbd5e0;
+      --text:#1a202c; --text2:#4a5568; --text3:#718096; --text4:#a0aec0;
+      --blue:#2b6cb0; --blue-light:#ebf8ff; --blue-mid:#bee3f8; --blue-dark:#2c5282;
+      --orange:#ed8936; --orange-light:#feebc8;
+      --green:#48bb78; --green-light:#c6f6d5; --green-dark:#276749;
+      --red:#fc8181; --red-dark:#c53030; --red-light:#fff5f5;
+      --yellow:#f6e05e; --yellow-dark:#744210; --yellow-light:#fffff0;
+      --shadow:0 1px 4px rgba(0,0,0,0.08); --shadow2:0 2px 8px rgba(0,0,0,0.12);
+      --radius:12px; --radius-sm:8px;
+      --input-size: 16px;
+    }
+    [data-theme="dark"] {
+      --bg:#1a202c; --bg2:#2d3748; --card:#2d3748; --card2:#3a4a5c;
+      --border:#4a5568; --border2:#718096;
+      --text:#f7fafc; --text2:#e2e8f0; --text3:#a0aec0; --text4:#718096;
+      --blue-light:#1a3a5c; --blue-mid:#2a4a6c;
+      --red-light:#3c1f1f; --orange-light:#3c2a10; --green-light:#1a3c2a;
+      --yellow-light:#2a2a10;
+      --shadow:0 1px 4px rgba(0,0,0,0.3); --shadow2:0 2px 8px rgba(0,0,0,0.4);
+    }
+    [data-size="large"] { --input-size:18px; }
+
+    * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+    html { transition:background .2s; }
+    body {
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:var(--bg); color:var(--text); min-height:100vh;
+      font-size:15px; transition:background .2s,color .2s;
+      padding-bottom:env(safe-area-inset-bottom, 16px);
+    }
+    [data-size="large"] body { font-size:17px; }
+
+    /* SETUP BANNER */
+    #setup-banner {
+      background:#fff3cd; border-bottom:3px solid #f6c000;
+      padding:14px 16px; font-size:14px; color:#333;
+    }
+    #setup-banner.hidden { display:none; }
+    .setup-title { font-weight:800; font-size:16px; color:#744210; margin-bottom:4px; }
+    .setup-steps { margin:10px 0 10px 18px; line-height:2; }
+    .setup-steps li { margin-bottom:2px; }
+    .setup-code { font-family:monospace; background:#fff; border:1px solid #ddd; border-radius:6px; padding:10px 12px; font-size:12px; white-space:pre; overflow-x:auto; margin:8px 0; line-height:1.6; }
+    .setup-btn { display:inline-block; margin-top:4px; padding:10px 18px; background:#2b6cb0; color:white; border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; min-height:44px; }
+    .setup-toggle { font-size:13px; color:#2b6cb0; font-weight:700; cursor:pointer; text-decoration:underline; }
+    .setup-steps-body { margin-top:10px; }
+
+    .sync-dot { width:10px; height:10px; border-radius:50%; background:#ccc; display:inline-block; margin-right:6px; flex-shrink:0; }
+    .sync-dot.live { background:#48bb78; box-shadow:0 0 0 3px rgba(72,187,120,.25); }
+    .sync-dot.local { background:#ed8936; }
+    .sync-status { display:flex; align-items:center; font-size:12px; color:var(--text4); padding:6px 16px; background:var(--bg2); font-weight:600; }
+
+    /* HEADER */
+    header {
+      background:linear-gradient(135deg,#2b6cb0,#1a4a80);
+      color:white; padding:14px 16px;
+      display:flex; align-items:center; justify-content:space-between;
+      box-shadow:0 2px 8px rgba(0,0,0,0.2);
+      position:sticky; top:0; z-index:100;
+      padding-top:max(14px, env(safe-area-inset-top));
+    }
+    .header-left { display:flex; align-items:center; gap:12px; }
+    .header-logo { width:40px; height:40px; background:rgba(255,255,255,0.15); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:21px; flex-shrink:0; }
+    .header-title h1 { font-size:20px; font-weight:800; letter-spacing:-.3px; }
+    .header-title p { font-size:11px; opacity:.75; margin-top:1px; letter-spacing:.3px; }
+    [data-size="large"] .header-title h1 { font-size:22px; }
+    .header-btn { background:rgba(255,255,255,0.15); border:none; color:white; min-width:44px; min-height:44px; border-radius:50%; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s; }
+    .header-btn:hover { background:rgba(255,255,255,0.28); }
+
+    /* SETTINGS */
+    .settings-drawer { background:var(--card); border-bottom:1px solid var(--border); overflow:hidden; max-height:0; transition:max-height .3s ease; }
+    .settings-drawer.open { max-height:200px; }
+    .settings-inner { padding:14px 16px; display:flex; flex-direction:column; gap:12px; }
+    .setting-row { display:flex; align-items:center; justify-content:space-between; font-size:16px; font-weight:600; color:var(--text2); min-height:44px; }
+    .pill-toggle { width:52px; height:30px; border-radius:15px; background:var(--border2); position:relative; cursor:pointer; transition:background .2s; flex-shrink:0; border:none; }
+    .pill-toggle.on { background:var(--blue); }
+    .pill-toggle::after { content:''; position:absolute; top:4px; left:4px; width:22px; height:22px; border-radius:50%; background:white; transition:left .2s; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+    .pill-toggle.on::after { left:26px; }
+
+    /* TABS */
+    .tabs { display:flex; background:#1a3a6a; position:sticky; top:68px; z-index:99; }
+    .tab { flex:1; padding:14px 6px; text-align:center; font-size:13px; font-weight:700; color:rgba(255,255,255,.6); cursor:pointer; border-bottom:3px solid transparent; transition:all .2s; position:relative; min-height:50px; display:flex; align-items:center; justify-content:center; }
+    .tab.active { color:white; border-bottom-color:#90cdf4; background:rgba(255,255,255,.08); }
+    .tab-badge { position:absolute; top:6px; right:6px; background:var(--red); color:white; border-radius:10px; font-size:10px; font-weight:800; padding:2px 6px; display:none; }
+    .tab-badge.on { display:block; }
+
+    /* PAGES */
+    .page { display:none; padding:14px; max-width:620px; margin:0 auto; }
+    .page.active { display:block; }
+
+    /* CARDS */
+    .card { background:var(--card); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); margin-bottom:14px; }
+    .card-title { font-size:17px; font-weight:700; color:var(--text); margin-bottom:14px; }
+    [data-size="large"] .card-title { font-size:19px; }
+
+    /* FORM */
+    .field-label { display:block; font-size:12px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:.6px; margin-bottom:6px; }
+    [data-size="large"] .field-label { font-size:14px; }
+    input[type=text], textarea {
+      width:100%; padding:13px 14px; border:2px solid var(--border);
+      border-radius:var(--radius-sm); font-size:var(--input-size);
+      margin-bottom:14px; background:var(--card2); color:var(--text);
+      transition:border-color .2s,background .2s;
+      -webkit-appearance:none; appearance:none;
+    }
+    input[type=text]:focus, textarea:focus { outline:none; border-color:var(--blue); background:var(--card); }
+    textarea { resize:vertical; min-height:70px; font-family:inherit; }
+
+    /* ITEM TILES */
+    .items-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+    .item-tile { border:2px solid var(--border); border-radius:var(--radius-sm); background:var(--card2); transition:all .15s; overflow:hidden; }
+    .item-tile.selected { border-color:var(--blue); background:var(--blue-light); }
+    .tile-label { display:flex; align-items:center; gap:8px; padding:13px 12px; cursor:pointer; font-size:15px; font-weight:500; color:var(--text2); min-height:50px; }
+    [data-size="large"] .tile-label { font-size:17px; min-height:56px; }
+    .item-tile.selected .tile-label { color:var(--blue); font-weight:600; }
+    .tile-label .icon { font-size:20px; flex-shrink:0; }
+    .tile-qty { display:none; align-items:center; justify-content:space-between; padding:6px 12px 10px; gap:4px; }
+    .item-tile.selected .tile-qty { display:flex; }
+    .qty-btn { width:36px; height:36px; border-radius:50%; border:none; background:var(--blue-mid); color:var(--blue); font-size:20px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .qty-btn:active { background:#90cdf4; }
+    .qty-num { font-size:17px; font-weight:700; color:var(--blue); min-width:28px; text-align:center; }
+
+    /* CUSTOM */
+    .add-custom { display:flex; gap:8px; margin-bottom:14px; }
+    .add-custom input { margin:0; flex:1; min-width:0; }
+    .btn-add-custom { padding:0 16px; min-height:48px; background:var(--blue-light); color:var(--blue); border:2px solid var(--blue-mid); border-radius:var(--radius-sm); font-size:15px; font-weight:700; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+
+    /* URGENT */
+    .urgent-toggle { display:flex; align-items:center; gap:12px; padding:14px; border:2px solid var(--border); border-radius:var(--radius-sm); cursor:pointer; margin-bottom:14px; background:var(--card2); transition:all .15s; user-select:none; min-height:60px; }
+    .urgent-toggle.on { border-color:var(--red); background:var(--red-light); }
+    .urgent-icon { font-size:22px; }
+    .urgent-text { flex:1; }
+    .urgent-text strong { display:block; font-size:15px; color:var(--text); }
+    .urgent-text span { font-size:12px; color:var(--text4); }
+    .urgent-toggle.on .urgent-text strong { color:var(--red-dark); }
+
+    /* BTN */
+    .btn-primary { width:100%; padding:17px; background:var(--blue); color:white; border:none; border-radius:var(--radius-sm); font-size:17px; font-weight:700; cursor:pointer; transition:background .15s; -webkit-appearance:none; }
+    .btn-primary:active { background:var(--blue-dark); }
+    [data-size="large"] .btn-primary { font-size:19px; padding:18px; }
+
+    /* TOAST */
+    .toast { position:fixed; bottom:calc(20px + env(safe-area-inset-bottom,0px)); left:50%; transform:translateX(-50%) translateY(120px); background:var(--green-dark); color:white; padding:14px 24px; border-radius:10px; font-size:15px; font-weight:600; box-shadow:var(--shadow2); transition:transform .3s ease; z-index:9999; white-space:nowrap; max-width:90vw; text-align:center; }
+    .toast.show { transform:translateX(-50%) translateY(0); }
+
+    /* FILTERS */
+    .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+    .filter-bar { display:flex; gap:6px; flex-wrap:wrap; }
+    .filter-btn { padding:9px 16px; border-radius:20px; border:2px solid var(--border2); background:var(--card); font-size:14px; font-weight:600; cursor:pointer; color:var(--text2); transition:all .15s; min-height:42px; }
+    .filter-btn.active { background:var(--blue); border-color:var(--blue); color:white; }
+    .tools-row { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+    .btn-tool { padding:9px 16px; border-radius:20px; border:2px solid var(--border2); background:var(--card); font-size:14px; font-weight:600; cursor:pointer; color:var(--text2); transition:all .15s; min-height:42px; }
+    .btn-tool.active { background:var(--blue-light); border-color:var(--blue); color:var(--blue); }
+
+    /* SOUND */
+    .sound-bar { display:flex; align-items:center; justify-content:space-between; background:var(--card); border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:12px; box-shadow:var(--shadow); font-size:15px; font-weight:600; color:var(--text2); cursor:pointer; user-select:none; min-height:52px; }
+
+    /* REQUEST CARDS */
+    .request-card { background:var(--card); border-radius:var(--radius); padding:14px; margin-bottom:12px; box-shadow:var(--shadow); border-left:4px solid var(--border2); }
+    .request-card.status-pending { border-left-color:var(--orange); }
+    .request-card.status-on-the-way { border-left-color:#4299e1; }
+    .request-card.status-done { border-left-color:var(--green); opacity:.5; }
+    .request-card.urgent-card { box-shadow:0 0 0 2px var(--red),var(--shadow); }
+    .urgent-banner { background:var(--red-light); color:var(--red-dark); font-size:12px; font-weight:800; letter-spacing:1px; padding:4px 10px; border-radius:6px; display:inline-block; margin-bottom:8px; }
+    .req-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
+    .req-room { font-size:18px; font-weight:700; color:var(--text); }
+    .req-name { font-size:13px; color:var(--text3); margin-top:2px; }
+    .req-time { font-size:12px; color:var(--text4); text-align:right; flex-shrink:0; }
+    .req-items { font-size:15px; color:var(--text2); margin-bottom:10px; line-height:1.6; }
+    .req-note { font-size:13px; color:var(--text3); font-style:italic; margin-bottom:8px; }
+    .status-badge { display:inline-block; padding:4px 12px; border-radius:12px; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; }
+    .badge-pending { background:var(--orange-light); color:#c05621; }
+    .badge-on-the-way { background:var(--blue-mid); color:var(--blue-dark); }
+    .badge-done { background:var(--green-light); color:var(--green-dark); }
+
+    .action-btns { display:flex; gap:8px; margin-top:12px; }
+    .btn-action { flex:1; padding:12px 6px; border-radius:var(--radius-sm); border:none; font-size:14px; font-weight:700; cursor:pointer; transition:all .15s; min-height:48px; }
+    [data-size="large"] .btn-action { font-size:16px; min-height:52px; }
+    .btn-on-the-way { background:var(--blue-light); color:var(--blue); }
+    .btn-done { background:var(--green-light); color:var(--green-dark); }
+    .btn-del { background:var(--red-light); color:var(--red-dark); max-width:50px; }
+
+    /* COMMENT */
+    .comment-section { margin-top:12px; border-top:1px solid var(--border); padding-top:12px; }
+    .comment-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--text3); margin-bottom:8px; }
+    .existing-comment { font-size:15px; color:var(--blue); background:var(--blue-light); border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:10px; display:flex; align-items:center; gap:8px; font-weight:500; border:1px solid var(--blue-mid); }
+    .existing-comment .comment-text { flex:1; }
+    .btn-clear-comment { background:none; border:none; cursor:pointer; color:var(--text4); font-size:18px; padding:4px 6px; border-radius:4px; min-width:36px; min-height:36px; display:flex; align-items:center; justify-content:center; }
+    .quick-replies { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+    .quick-reply { padding:9px 14px; border-radius:20px; border:1.5px solid var(--border2); background:var(--card2); color:var(--text2); font-size:14px; font-weight:600; cursor:pointer; transition:all .15s; min-height:42px; display:flex; align-items:center; }
+    .quick-reply:active { border-color:var(--blue); color:var(--blue); background:var(--blue-light); }
+    .comment-input-row { display:flex; gap:8px; }
+    .comment-input-row input { margin:0; flex:1; font-size:var(--input-size); padding:12px; border-radius:var(--radius-sm); min-width:0; }
+    .btn-save-comment { padding:0 16px; min-height:50px; background:var(--blue); color:white; border:none; border-radius:var(--radius-sm); font-size:15px; font-weight:700; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+
+    /* EMPTY */
+    .empty-state { text-align:center; padding:48px 20px; color:var(--text4); }
+    .empty-state .big-icon { font-size:52px; margin-bottom:12px; }
+    .empty-state p { font-size:16px; }
+
+    /* TASKS */
+    .add-task-row { display:flex; gap:8px; margin-bottom:12px; }
+    .add-task-row input { margin:0; flex:1; min-width:0; }
+    .btn-add-task { padding:0 16px; min-height:50px; background:var(--blue); color:white; border:none; border-radius:var(--radius-sm); font-size:15px; font-weight:700; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+    .task-item { display:flex; align-items:center; gap:14px; padding:13px 4px; border-bottom:1px solid var(--border); min-height:52px; }
+    .task-item:last-child { border-bottom:none; }
+    .task-item.done { opacity:.45; }
+    .task-check { width:28px; height:28px; border-radius:50%; border:2px solid var(--border2); background:var(--card2); cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:15px; transition:all .15s; }
+    .task-item.done .task-check { background:var(--green); border-color:var(--green); color:white; }
+    .task-text { flex:1; font-size:16px; color:var(--text); font-weight:500; line-height:1.4; }
+    [data-size="large"] .task-text { font-size:18px; }
+    .task-item.done .task-text { text-decoration:line-through; color:var(--text4); }
+    .task-del { background:none; border:none; cursor:pointer; color:var(--text4); font-size:18px; padding:4px 6px; border-radius:4px; min-width:40px; min-height:40px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .tasks-header-bar { background:var(--card); border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:0; box-shadow:var(--shadow); display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none; border-bottom-left-radius:0; border-bottom-right-radius:0; min-height:54px; }
+    .tasks-header-bar .tasks-title { font-size:16px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:8px; }
+    .tasks-count-badge { background:var(--orange); color:white; border-radius:10px; font-size:11px; font-weight:800; padding:3px 8px; display:none; }
+    .tasks-count-badge.on { display:inline-block; }
+    .tasks-expand { font-size:20px; color:var(--text4); transition:transform .2s; }
+    .tasks-header-bar.open .tasks-expand { transform:rotate(180deg); }
+    .tasks-laundry-list { display:none; flex-direction:column; background:var(--card); border-radius:0 0 var(--radius-sm) var(--radius-sm); padding:0 16px; margin-bottom:12px; box-shadow:var(--shadow); }
+    .tasks-laundry-list.open { display:flex; }
+
+    /* SUMMARY */
+    .summary-bar { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:14px; }
+    .summary-box { background:var(--card); border-radius:var(--radius-sm); padding:14px 8px; text-align:center; box-shadow:var(--shadow); }
+    .summary-box .num { font-size:30px; font-weight:800; }
+    .summary-box .lbl { font-size:12px; color:var(--text4); margin-top:2px; }
+    .num-pending{color:var(--orange);} .num-otw{color:#4299e1;} .num-done{color:var(--green);}
+    .top-item-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    .top-item-name { font-size:13px; font-weight:600; color:var(--text2); min-width:100px; }
+    .top-item-bar-wrap { flex:1; background:var(--bg2); border-radius:4px; height:12px; overflow:hidden; }
+    .top-item-bar { height:100%; background:var(--blue); border-radius:4px; transition:width .4s ease; }
+    .top-item-count { font-size:13px; font-weight:700; color:var(--text3); min-width:24px; text-align:right; }
+    .btn-clear-done { padding:10px 18px; border-radius:20px; border:2px solid var(--red); background:var(--red-light); color:var(--red-dark); font-size:14px; font-weight:700; cursor:pointer; min-height:44px; }
+    .btn-clear-done:disabled { opacity:.4; cursor:not-allowed; }
+
+    @media (max-width: 360px) {
+      .items-grid { grid-template-columns:1fr; }
+      .action-btns { flex-wrap:wrap; }
+      .quick-replies { gap:6px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ============================================================
+     SETUP BANNER — only shows when Firebase is not configured
+     ============================================================ -->
+<div id="setup-banner">
+  <div class="setup-title">🔗 Enable live sharing across devices</div>
+  <p style="font-size:13px;color:#555;margin-bottom:6px">Right now requests only save on <em>this</em> device. Follow these steps once to share with your whole team in real time — it's free!</p>
+  <span class="setup-toggle" onclick="toggleSetupSteps()">▶ Show setup steps</span>
+  <div class="setup-steps-body" id="setup-steps-body" style="display:none">
+    <ol class="setup-steps">
+      <li>Go to <strong>console.firebase.google.com</strong> and sign in with a Google account</li>
+      <li>Click <strong>"Add project"</strong> → name it (e.g. "Hotel Laundry") → click through to create it</li>
+      <li>Inside your project, click <strong>"Realtime Database"</strong> in the left menu → <strong>"Create database"</strong> → choose <em>Start in test mode</em> → Done</li>
+      <li>Click the ⚙️ gear → <strong>"Project settings"</strong> → scroll to <strong>"Your apps"</strong> → click the <strong>&lt;/&gt;</strong> web icon → Register app → copy the <code>firebaseConfig</code> block</li>
+      <li>Open this HTML file in a text editor, find the line that says <code>PASTE YOUR FIREBASE CONFIG HERE</code> and replace the placeholder with your config</li>
+      <li>Save the file and open it in your browser — the orange banner will disappear and the green dot will say <strong>Live ✓</strong></li>
+    </ol>
+    <div class="setup-code">// It will look like this — paste yours in place of it:
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSy...",
+  authDomain: "hotel-laundry.firebaseapp.com",
+  databaseURL: "https://hotel-laundry-default-rtdb.firebaseio.com",
+  projectId: "hotel-laundry",
+  storageBucket: "hotel-laundry.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123:web:abc..."
+};</div>
+    <p style="font-size:12px;color:#666;margin-top:4px">Then host the file anywhere (email it, put it on a shared drive, or upload to <strong>netlify.com/drop</strong> for a free link you can send to the whole team.)</p>
+  </div>
+</div>
+
+<!-- SYNC STATUS -->
+<div class="sync-status" id="sync-status">
+  <span class="sync-dot" id="sync-dot"></span>
+  <span id="sync-label">Local only — changes won't show on other devices</span>
+</div>
+
+<header>
+  <div class="header-left">
+    <div class="header-logo">🧺</div>
+    <div class="header-title">
+      <h1>Laundry Requests</h1>
+      <p>HOUSEKEEPING SUPPLY TRACKER</p>
+    </div>
+  </div>
+  <button class="header-btn" onclick="toggleSettings()">⚙️</button>
+</header>
+
+<div class="settings-drawer" id="settings-drawer">
+  <div class="settings-inner">
+    <div class="setting-row"><span>🌙 Dark mode</span><button class="pill-toggle" id="dark-toggle" onclick="toggleDark()"></button></div>
+    <div class="setting-row"><span>🔠 Larger text</span><button class="pill-toggle" id="size-toggle" onclick="toggleSize()"></button></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" id="tab-request" onclick="showTab('request')">📋 Request</div>
+  <div class="tab" id="tab-laundry" onclick="showTab('laundry')">🧺 Laundry<span class="tab-badge" id="pending-badge"></span></div>
+  <div class="tab" id="tab-manager" onclick="showTab('manager')">👔 Manager</div>
+</div>
+
+<!-- REQUEST -->
+<div id="page-request" class="page active">
+  <div class="card">
+    <div class="card-title">New supply request</div>
+    <span class="field-label">Your name</span>
+    <input type="text" id="req-name" placeholder="e.g. Maria" autocomplete="given-name" />
+    <span class="field-label">Room / Area</span>
+    <input type="text" id="req-room" placeholder="e.g. Room 204, Pool Area, 3rd Floor" />
+    <span class="field-label">What do you need?</span>
+    <div class="items-grid" id="items-grid">
+      <div class="item-tile" data-value="Bed Sheets"><div class="tile-label" onclick="toggleTile(this.parentElement)"><span class="icon">🛏️</span> Bed Sheets</div><div class="tile-qty"><button class="qty-btn" onclick="changeQty(this,-1)">−</button><span class="qty-num">1</span><button class="qty-btn" onclick="changeQty(this,1)">+</button></div></div>
+      <div class="item-tile" data-value="Pillowcases"><div class="tile-label" onclick="toggleTile(this.parentElement)"><span class="icon">🛌</span> Pillowcases</div><div class="tile-qty"><button class="qty-btn" onclick="changeQty(this,-1)">−</button><span class="qty-num">1</span><button class="qty-btn" onclick="changeQty(this,1)">+</button></div></div>
+      <div class="item-tile" data-value="Bath Towels"><div class="tile-label" onclick="toggleTile(this.parentElement)"><span class="icon">🛁</span> Bath Towels</div><div class="tile-qty"><button class="qty-btn" onclick="changeQty(this,-1)">−</button><span class="qty-num">1</span><button class="qty-btn" onclick="changeQty(this,1)">+</button></div></div>
+      <div class="item-tile" data-value="Hand Towels"><div class="tile-label" onclick="toggleTile(this.parentElement)"><span class="icon">🤲</span> Hand Towels</div><div class="tile-qty"><button class="qty-btn" onclick="changeQty(this,-1)">−</button><span class="qty-num">1</span><button class="qty-btn" onclick="changeQty(this,1)">+</button></div></div>
+      <div class="item-tile" data-value="Face Cloths"><div class="tile-label" onclick="toggleTile(this.parentElement)"><span class="icon">🧖</span> Face Cloths</div><div class="tile-qty"><button class="qty-btn" onclick="changeQty(this,-1)">−</button><span class="qty-num">1</span><button class="qty-btn" onclick="changeQty(this,1)">+</button></div></div>
+      <div class="item-tile" data-value="Pool Towels"><div class="tile-label" onclick="toggleTile(this.parentElement)"><span class="icon">🏊</span> Pool Towels</div><div class="tile-qty"><button class="qty-btn" onclick="changeQty(this,-1)">−</button><span class="qty-num">1</span><button class="qty-btn" onclick="changeQty(this,1)">+</button></div></div>
+      <div class="item-tile" data-value="Duvet Covers"><div class="tile-label" onclick="toggleTile(this.parentElement)"><span class="icon">🌙</span> Duvet Covers</div><div class="tile-qty"><button class="qty-btn" onclick="changeQty(this,-1)">−</button><span class="qty-num">1</span><button class="qty-btn" onclick="changeQty(this,1)">+</button></div></div>
+      <div class="item-tile" data-value="Robes"><div class="tile-label" onclick="toggleTile(this.parentElement)"><span class="icon">🥋</span> Robes</div><div class="tile-qty"><button class="qty-btn" onclick="changeQty(this,-1)">−</button><span class="qty-num">1</span><button class="qty-btn" onclick="changeQty(this,1)">+</button></div></div>
+    </div>
+    <span class="field-label">Need something else?</span>
+    <div class="add-custom">
+      <input type="text" id="custom-item-input" placeholder="e.g. Yoga Mats, Table Linen…" />
+      <button class="btn-add-custom" onclick="addCustomItem()">+ Add</button>
+    </div>
+    <span class="field-label">Mark as urgent?</span>
+    <div class="urgent-toggle" id="urgent-toggle" onclick="toggleUrgent()">
+      <span class="urgent-icon">🚨</span>
+      <div class="urgent-text"><strong>Urgent Request</strong><span>Guest arriving soon / needs this ASAP</span></div>
+      <button class="pill-toggle" id="urgent-pill"></button>
+    </div>
+    <span class="field-label">Notes (optional)</span>
+    <textarea id="req-note" placeholder="e.g. Guest checking in at 2pm, need 2 full sets"></textarea>
+    <button class="btn-primary" onclick="submitRequest()">📤 Send Request to Laundry</button>
+  </div>
+</div>
+
+<!-- LAUNDRY -->
+<div id="page-laundry" class="page">
+  <div class="sound-bar" onclick="toggleSound()">
+    <span>🔔 Sound alert for new requests</span>
+    <button class="pill-toggle" id="sound-toggle"></button>
+  </div>
+  <div id="manager-tasks-laundry"></div>
+  <div class="section-header">
+    <div class="filter-bar">
+      <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+      <button class="filter-btn" onclick="setFilter('pending',this)">⏳ Pending</button>
+      <button class="filter-btn" onclick="setFilter('on-the-way',this)">🚚 On Way</button>
+    </div>
+  </div>
+  <div class="tools-row">
+    <button class="btn-tool" id="sort-btn" onclick="toggleSort()">🕐 Newest first</button>
+  </div>
+  <div id="laundry-list"></div>
+</div>
+
+<!-- MANAGER -->
+<div id="page-manager" class="page">
+  <div class="card">
+    <div class="card-title">📝 Tasks for the team</div>
+    <div class="add-task-row">
+      <input type="text" id="task-input" placeholder="e.g. Restock 3rd floor linen closet" onkeydown="if(event.key==='Enter')addTask()" />
+      <button class="btn-add-task" onclick="addTask()">+ Add</button>
+    </div>
+    <div id="task-list"></div>
+  </div>
+  <div class="summary-bar">
+    <div class="summary-box"><div class="num num-pending" id="count-pending">0</div><div class="lbl">Pending</div></div>
+    <div class="summary-box"><div class="num num-otw" id="count-otw">0</div><div class="lbl">On the Way</div></div>
+    <div class="summary-box"><div class="num num-done" id="count-done">0</div><div class="lbl">Done Today</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">📊 Most requested today</div>
+    <div id="top-items-list"><p style="color:var(--text4);font-size:14px">No requests yet.</p></div>
+  </div>
+  <div class="section-header">
+    <span style="font-weight:700;color:var(--text2);font-size:16px">All Requests</span>
+    <button class="btn-clear-done" id="btn-clear-done" onclick="clearDone()">🗑️ Clear Done</button>
+  </div>
+  <div id="manager-list"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────
+//  PASTE YOUR FIREBASE CONFIG HERE
+//  (leave as-is if you haven't set up Firebase yet)
+// ─────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey: "",
+  authDomain: "",
+  databaseURL: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+// ─────────────────────────────────────────────
+
+let requests  = [];
+let tasks     = [];
+let soundOn   = localStorage.getItem('laundry_sound') !== 'off';
+let darkOn    = localStorage.getItem('laundry_dark')  === 'on';
+let largeText = localStorage.getItem('laundry_large') === 'on';
+let sortOldest=false, urgentOn=false, currentFilter='all', currentTab='request';
+let audioCtx=null, settingsOpen=false;
+let usingFirebase = false;
+let reqRef=null, taskRef=null;
+let prevCount = 0;
+
+// ─── Firebase init ───────────────────────────
+function tryFirebase() {
+  if (!FIREBASE_CONFIG.databaseURL) return false;
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    const db = firebase.database();
+    reqRef  = db.ref('laundry/requests');
+    taskRef = db.ref('laundry/tasks');
+
+    // Real-time listener: requests
+    reqRef.on('value', snap => {
+      const val = snap.val() || {};
+      const incoming = Object.values(val);
+      const newCount = incoming.filter(r => !requests.find(x=>x.id===r.id) && r.status==='pending').length;
+      requests = incoming;
+      updateBadge();
+      if (currentTab==='laundry') renderLaundry();
+      if (currentTab==='manager') renderManager();
+      if (soundOn && newCount > 0) alertSound();
+    });
+
+    // Real-time listener: tasks
+    taskRef.on('value', snap => {
+      const val = snap.val() || {};
+      tasks = Object.values(val);
+      if (currentTab==='laundry') renderTasksLaundry();
+      if (currentTab==='manager') renderTasks();
+    });
+
+    usingFirebase = true;
+    setSyncStatus(true);
+    document.getElementById('setup-banner').classList.add('hidden');
+    return true;
+  } catch(e) {
+    console.warn('Firebase init failed', e);
+    return false;
+  }
+}
+
+function setSyncStatus(live) {
+  const dot = document.getElementById('sync-dot');
+  const lbl = document.getElementById('sync-label');
+  if (live) {
+    dot.className = 'sync-dot live';
+    lbl.textContent = 'Live ✓ — all devices update in real time';
+  } else {
+    dot.className = 'sync-dot local';
+    lbl.textContent = 'Local only — changes won\'t show on other devices';
+  }
+}
+
+// ─── Save / load ─────────────────────────────
+function save() {
+  if (usingFirebase) {
+    const obj = {};
+    requests.forEach(r => { obj[r.id] = r; });
+    reqRef.set(obj);
+  } else {
+    localStorage.setItem('laundry_req', JSON.stringify(requests));
+  }
+  updateBadge();
+}
+function saveTasks() {
+  if (usingFirebase) {
+    const obj = {};
+    tasks.forEach(t => { obj[t.id] = t; });
+    taskRef.set(obj);
+  } else {
+    localStorage.setItem('laundry_tasks', JSON.stringify(tasks));
+  }
+}
+
+// ─── Local-only polling (fallback) ───────────
+function pollLocal() {
+  if (usingFirebase) return; // firebase handles real-time
+  const fresh = JSON.parse(localStorage.getItem('laundry_req') || '[]');
+  const newCount = fresh.filter(r => !requests.find(x=>x.id===r.id) && r.status==='pending').length;
+  requests = fresh;
+  tasks = JSON.parse(localStorage.getItem('laundry_tasks') || '[]');
+  updateBadge();
+  if (currentTab==='laundry') { renderLaundry(); renderTasksLaundry(); }
+  if (currentTab==='manager') { renderManager(); renderTasks(); }
+  if (soundOn && newCount > 0) alertSound();
+}
+
+// ─── Boot ─────────────────────────────────────
+function init() {
+  applyTheme(); updateBadge(); updateSoundToggle();
+  const ok = tryFirebase();
+  if (!ok) {
+    // Load from localStorage
+    requests = JSON.parse(localStorage.getItem('laundry_req') || '[]');
+    tasks    = JSON.parse(localStorage.getItem('laundry_tasks') || '[]');
+    renderTasks(); renderTasksLaundry();
+    setInterval(pollLocal, 3000);
+  }
+}
+
+function applyTheme() {
+  document.documentElement.dataset.theme = darkOn    ? 'dark'  : '';
+  document.documentElement.dataset.size  = largeText ? 'large' : '';
+  document.getElementById('dark-toggle').classList.toggle('on', darkOn);
+  document.getElementById('size-toggle').classList.toggle('on', largeText);
+}
+function toggleSettings() { settingsOpen=!settingsOpen; document.getElementById('settings-drawer').classList.toggle('open',settingsOpen); }
+function toggleDark()  { darkOn=!darkOn;       localStorage.setItem('laundry_dark',  darkOn?'on':'off');    applyTheme(); }
+function toggleSize()  { largeText=!largeText; localStorage.setItem('laundry_large', largeText?'on':'off'); applyTheme(); }
+function toggleSetupSteps() {
+  const el=document.getElementById('setup-steps-body');
+  const tog=document.querySelector('.setup-toggle');
+  const open=el.style.display==='block';
+  el.style.display=open?'none':'block';
+  tog.textContent=(open?'▶':'▼')+' '+(open?'Show':'Hide')+' setup steps';
+}
+
+function showTab(tab) {
+  currentTab=tab;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+tab).classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+  window.scrollTo(0,0);
+  if (tab==='laundry') { renderLaundry(); renderTasksLaundry(); }
+  if (tab==='manager') { renderManager(); renderTasks(); }
+}
+function updateBadge() {
+  const n=requests.filter(r=>r.status==='pending').length;
+  const b=document.getElementById('pending-badge');
+  b.textContent=n; b.classList.toggle('on',n>0);
+}
+
+function toggleTile(tile) {
+  tile.classList.toggle('selected');
+  if (!tile.classList.contains('selected')) tile.querySelector('.qty-num').textContent='1';
+}
+function changeQty(btn, delta) {
+  const n=btn.closest('.item-tile').querySelector('.qty-num');
+  n.textContent=Math.max(1,Math.min(20,parseInt(n.textContent)+delta));
+}
+function addCustomItem() {
+  const inp=document.getElementById('custom-item-input'), val=inp.value.trim();
+  if (!val) return;
+  if (document.querySelector(`[data-value="${val}"]`)) { showToast('Already in the list!'); return; }
+  const tile=document.createElement('div');
+  tile.className='item-tile'; tile.dataset.value=val;
+  tile.innerHTML=`<div class="tile-label" onclick="toggleTile(this.parentElement)"><span class="icon">✏️</span> ${val}</div><div class="tile-qty"><button class="qty-btn" onclick="changeQty(this,-1)">−</button><span class="qty-num">1</span><button class="qty-btn" onclick="changeQty(this,1)">+</button></div>`;
+  document.getElementById('items-grid').appendChild(tile);
+  inp.value=''; showToast(`Added "${val}"`);
+}
+function toggleUrgent() {
+  urgentOn=!urgentOn;
+  document.getElementById('urgent-toggle').classList.toggle('on',urgentOn);
+  document.getElementById('urgent-pill').classList.toggle('on',urgentOn);
+}
+
+function submitRequest() {
+  const name=document.getElementById('req-name').value.trim();
+  const room=document.getElementById('req-room').value.trim();
+  const note=document.getElementById('req-note').value.trim();
+  const tiles=[...document.querySelectorAll('#items-grid .item-tile.selected')];
+  if (!name) { alert('Please enter your name.'); return; }
+  if (!room) { alert('Please enter the room or area.'); return; }
+  if (!tiles.length) { alert('Please select at least one item.'); return; }
+  const items=tiles.map(t=>{const q=parseInt(t.querySelector('.qty-num').textContent);return q>1?`${t.dataset.value} ×${q}`:t.dataset.value;});
+  const req = {id:Date.now(),name,room,items,note,urgent:urgentOn,status:'pending',comment:'',
+    time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),
+    date:new Date().toLocaleDateString()};
+  requests.unshift(req); save();
+  document.getElementById('req-name').value='';
+  document.getElementById('req-room').value='';
+  document.getElementById('req-note').value='';
+  document.querySelectorAll('.item-tile').forEach(t=>{t.classList.remove('selected');t.querySelector('.qty-num').textContent='1';});
+  urgentOn=false;
+  document.getElementById('urgent-toggle').classList.remove('on');
+  document.getElementById('urgent-pill').classList.remove('on');
+  showToast('✅ Request sent to laundry!');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function setFilter(f,btn) {
+  currentFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); renderLaundry();
+}
+function toggleSort() {
+  sortOldest=!sortOldest;
+  document.getElementById('sort-btn').textContent=sortOldest?'🕐 Oldest first':'🕐 Newest first';
+  document.getElementById('sort-btn').classList.toggle('active',sortOldest);
+  renderLaundry();
+}
+function renderLaundry() {
+  const list=document.getElementById('laundry-list');
+  let data=[...requests].sort((a,b)=>{if(a.urgent!==b.urgent)return a.urgent?-1:1;return sortOldest?a.id-b.id:b.id-a.id;});
+  if (currentFilter!=='all') data=data.filter(r=>r.status===currentFilter);
+  if (!data.length) { list.innerHTML=`<div class="empty-state"><div class="big-icon">🎉</div><p>${currentFilter==='pending'?'No pending requests!':'Nothing here yet.'}</p></div>`; return; }
+  list.innerHTML=data.map(r=>`
+    <div class="request-card status-${r.status}${r.urgent?' urgent-card':''}" id="card-${r.id}">
+      ${r.urgent?'<div class="urgent-banner">🚨 URGENT</div>':''}
+      <div class="req-header">
+        <div><div class="req-room">${r.room}</div><div class="req-name">by ${r.name}</div></div>
+        <div class="req-time">${r.date}<br>${r.time}</div>
+      </div>
+      <div class="req-items">🧺 ${r.items.join(' · ')}</div>
+      ${r.note?`<div class="req-note">📝 ${r.note}</div>`:''}
+      <span class="status-badge badge-${r.status}">${statusLabel(r.status)}</span>
+      <div class="action-btns">
+        ${r.status==='pending'?`<button class="btn-action btn-on-the-way" onclick="updateStatus(${r.id},'on-the-way')">🚚 On the Way</button>`:''}
+        ${r.status!=='done'?`<button class="btn-action btn-done" onclick="updateStatus(${r.id},'done')">✅ Done</button>`:''}
+        <button class="btn-action btn-del" onclick="deleteReq(${r.id})">🗑️</button>
+      </div>
+      <div class="comment-section">
+        <div class="comment-label">💬 Laundry team note</div>
+        ${r.comment?`<div class="existing-comment"><span class="comment-text">${r.comment}</span><button class="btn-clear-comment" onclick="clearComment(${r.id})">✕</button></div>`:''}
+        <div class="quick-replies">
+          <span class="quick-reply" onclick="quickReply(${r.id},'Out of stock — coming later')">⚠️ Out of stock</span>
+          <span class="quick-reply" onclick="quickReply(${r.id},'On the way in 10 mins')">🕐 10 mins</span>
+          <span class="quick-reply" onclick="quickReply(${r.id},'Delivered ✓')">✅ Delivered</span>
+          <span class="quick-reply" onclick="quickReply(${r.id},'Low supply today')">📦 Low supply</span>
+        </div>
+        <div class="comment-input-row">
+          <input type="text" id="comment-inp-${r.id}" placeholder="Or type your own note…" value="${r.comment||''}" onkeydown="if(event.key==='Enter')saveComment(${r.id})" />
+          <button class="btn-save-comment" onclick="saveComment(${r.id})">Save</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+function statusLabel(s){return s==='pending'?'⏳ Pending':s==='on-the-way'?'🚚 On the Way':'✅ Done';}
+function updateStatus(id,status) {
+  const r=requests.find(x=>x.id===id); if(!r)return;
+  r.status=status; save();
+  if (!usingFirebase) renderLaundry(); // firebase listener handles re-render
+  if (status==='done') {
+    showToast('✅ Done! Removing…');
+    setTimeout(()=>{requests=requests.filter(x=>x.id!==id);save();if(!usingFirebase){renderLaundry();if(currentTab==='manager')renderManager();}},1500);
+  } else showToast('Updated!');
+}
+function deleteReq(id){if(!confirm('Remove this request?'))return;requests=requests.filter(x=>x.id!==id);save();if(!usingFirebase){renderLaundry();if(currentTab==='manager')renderManager();}}
+function quickReply(id,text){const r=requests.find(x=>x.id===id);if(r){r.comment=text;save();if(!usingFirebase)renderLaundry();showToast('Note saved!');}}
+function saveComment(id){const inp=document.getElementById('comment-inp-'+id),r=requests.find(x=>x.id===id);if(!inp||!r)return;r.comment=inp.value.trim();save();if(!usingFirebase)renderLaundry();showToast(r.comment?'Note saved!':'Note cleared!');}
+function clearComment(id){const r=requests.find(x=>x.id===id);if(r){r.comment='';save();if(!usingFirebase)renderLaundry();}}
+
+function renderManager() {
+  const pending=requests.filter(r=>r.status==='pending').length;
+  const otw=requests.filter(r=>r.status==='on-the-way').length;
+  const done=requests.filter(r=>r.status==='done').length;
+  document.getElementById('count-pending').textContent=pending;
+  document.getElementById('count-otw').textContent=otw;
+  document.getElementById('count-done').textContent=done;
+  const ic={};
+  requests.forEach(r=>r.items.forEach(item=>{const b=item.replace(/ ×\d+$/,'');const q=parseInt((item.match(/×(\d+)$/)||[0,1])[1]);ic[b]=(ic[b]||0)+q;}));
+  const s=Object.entries(ic).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const mx=s[0]?.[1]||1;
+  document.getElementById('top-items-list').innerHTML=s.length?s.map(([n,c])=>`<div class="top-item-row"><span class="top-item-name">${n}</span><div class="top-item-bar-wrap"><div class="top-item-bar" style="width:${Math.round(c/mx*100)}%"></div></div><span class="top-item-count">${c}</span></div>`).join(''):'<p style="color:var(--text4);font-size:14px">No requests yet.</p>';
+  document.getElementById('btn-clear-done').disabled=done===0;
+  const ml=document.getElementById('manager-list');
+  if(!requests.length){ml.innerHTML=`<div class="empty-state"><div class="big-icon">📋</div><p>No requests yet.</p></div>`;return;}
+  ml.innerHTML=[...requests].sort((a,b)=>(b.urgent?1:0)-(a.urgent?1:0)||b.id-a.id).map(r=>`
+    <div class="request-card status-${r.status}${r.urgent?' urgent-card':''}">
+      ${r.urgent?'<div class="urgent-banner">🚨 URGENT</div>':''}
+      <div class="req-header">
+        <div><div class="req-room">${r.room}</div><div class="req-name">${r.name} · ${r.time}</div></div>
+        <span class="status-badge badge-${r.status}">${statusLabel(r.status)}</span>
+      </div>
+      <div class="req-items">${r.items.join(' · ')}</div>
+      ${r.note?`<div class="req-note">📝 ${r.note}</div>`:''}
+      ${r.comment?`<div class="req-note">💬 ${r.comment}</div>`:''}
+    </div>`).join('');
+}
+function clearDone(){if(!confirm('Remove all completed requests?'))return;requests=requests.filter(r=>r.status!=='done');save();if(!usingFirebase)renderManager();showToast('Done requests cleared!');}
+
+function addTask(){const inp=document.getElementById('task-input'),text=inp.value.trim();if(!text)return;tasks.unshift({id:Date.now(),text,done:false});saveTasks();inp.value='';if(!usingFirebase){renderTasks();renderTasksLaundry();}showToast('Task added!');}
+function toggleTask(id){const t=tasks.find(x=>x.id===id);if(t){t.done=!t.done;saveTasks();if(!usingFirebase){renderTasks();renderTasksLaundry();}}}
+function deleteTask(id){tasks=tasks.filter(x=>x.id!==id);saveTasks();if(!usingFirebase){renderTasks();renderTasksLaundry();}}
+function renderTasks(){const el=document.getElementById('task-list');if(!el)return;el.innerHTML=!tasks.length?'<p style="color:var(--text4);font-size:14px;padding:8px 0">No tasks yet. Add one above.</p>':tasks.map(t=>`<div class="task-item${t.done?' done':''}"><div class="task-check" onclick="toggleTask(${t.id})">${t.done?'✓':''}</div><span class="task-text">${t.text}</span><button class="task-del" onclick="deleteTask(${t.id})">✕</button></div>`).join('');}
+function renderTasksLaundry(){const el=document.getElementById('manager-tasks-laundry');if(!el)return;if(!tasks.length){el.innerHTML='';return;}const pending=tasks.filter(t=>!t.done);const wasOpen=el.querySelector('.tasks-header-bar.open');el.innerHTML=`<div class="tasks-header-bar${wasOpen?' open':''}" onclick="toggleTasksPanel()"><div class="tasks-title">📝 Manager's Tasks<span class="tasks-count-badge${pending.length?' on':''}">${pending.length} left</span></div><span class="tasks-expand">▾</span></div><div class="tasks-laundry-list${wasOpen?' open':''}" id="tasks-laundry-inner">${tasks.map(t=>`<div class="task-item${t.done?' done':''}"><div class="task-check" onclick="toggleTask(${t.id})">${t.done?'✓':''}</div><span class="task-text">${t.text}</span></div>`).join('')}</div>`;}
+function toggleTasksPanel(){const bar=document.querySelector('.tasks-header-bar'),list=document.getElementById('tasks-laundry-inner');if(bar&&list){bar.classList.toggle('open');list.classList.toggle('open');}}
+
+function toggleSound(){soundOn=!soundOn;localStorage.setItem('laundry_sound',soundOn?'on':'off');updateSoundToggle();if(soundOn)playBeep(880,0.1);}
+function updateSoundToggle(){document.getElementById('sound-toggle').classList.toggle('on',soundOn);}
+function playBeep(freq,dur){try{if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(0.35,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur);o.start();o.stop(audioCtx.currentTime+dur);}catch(e){}}
+function alertSound(){playBeep(660,0.12);setTimeout(()=>playBeep(880,0.18),160);}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+
+init();
+</script>
+</body>
+</html>
